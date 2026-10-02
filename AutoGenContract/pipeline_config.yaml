@@ -1,0 +1,117 @@
+# ═══════════════════════════════════════════════════════════════
+# AutoGenContract — 合同生成流水线配置 v3.0
+# 5-stage pipeline: 文件收集→合同生成→质量审查→工作量统计→文档导出
+# ═══════════════════════════════════════════════════════════════
+
+input:
+  source_dir: source/                       # 参考文档目录（读取所有文件）
+  examples_dir: 合同案例/                    # 合同案例目录
+  profile_dir: profile/                      # 全局参考模板目录
+  replace_xlsx: templates/replace.xlsx       # 占位符映射表（向后兼容）
+
+output:
+  dir: .cache                                # 流水线输出根目录
+  contract_docx: true                        # 生成合同 DOCX
+  review_report: true                        # 生成审查报告
+  statistics_report: true                    # 生成工作量统计
+
+# 合同编号生成
+contract_id:
+  prefix: "HT"                               # 编号前缀
+  date_format: "%Y%m%d"                      # 日期格式
+
+# LLM 配置
+llm:
+  model: "deepseek-v4-pro"
+  temperature: 0.3
+  max_tokens: 8192                           # 完整合同需要更多 tokens
+  timeout: 300                               # 单次请求超时（秒）
+  max_retries: 2
+
+# Claude Code 配置（用于通过 Skill 调用）
+claude:
+  timeout: 600
+  max_retries: 3
+  allowed_tools:
+    - Read
+    - Write
+    - Bash
+    - Glob
+    - Grep
+
+# ═══════════════════════════════════════════════════════════════
+# Pipeline 阶段定义 v3.0（5阶段）
+# ═══════════════════════════════════════════════════════════════
+stages:
+  # ── 阶段 0：文件收集 ──
+  - id: 0
+    name: 文件收集
+    description: 收集用户上传文件、source/参考文档和合同案例，加载为生成上下文
+    cache_dir: 02_examples
+    enabled: true
+
+  # ── 阶段 1：合同内容生成 ──
+  - id: 1
+    name: 合同内容生成
+    description: AI 一次性生成包含全部13个章节的完整中文服务合同
+    cache_dir: 03_contract
+    enabled: true
+    skill: contract-generate
+
+  # ── 阶段 2：合同质量审查 ──
+  - id: 2
+    name: 合同质量审查
+    description: AI 对已生成合同进行完整性、合法性、格式、可操作性审查
+    cache_dir: 03_contract
+    enabled: true
+    skill: contract-review
+
+  # ── 阶段 3：工作量统计 ──
+  - id: 3
+    name: 工作量统计
+    description: AI 从合同中提取服务项目、交付物、里程碑和工时汇总
+    cache_dir: 03_contract
+    enabled: true
+    skill: contract-statistics
+
+  # ── 阶段 4：文档导出 ──
+  - id: 4
+    name: 文档导出
+    description: 生成格式化合同 DOCX、审查报告和工作量统计报告
+    cache_dir: 04_output
+    enabled: true
+
+# 阶段 2 和 3 并行执行
+parallel_stages:
+  - [2, 3]
+
+# ═══════════════════════════════════════════════════════════════
+# DOCX 格式设置
+# ═══════════════════════════════════════════════════════════════
+format:
+  company_info:
+    default_provider: "天津智算数字产业发展有限公司"  # 乙方默认名称
+    provider_bank: "中国银行股份有限公司天津河北支行"
+    provider_account: "120110101000026046"
+    provider_tax_id: "91120105MAC79J3G6B"
+
+  docx:
+    cn_title_font: "黑体"                   # 标题中文字体
+    cn_body_font: "宋体"                    # 正文中文字体
+    en_font: "Times New Roman"              # 英文/数字字体
+    title_size: 14                          # 标题字号（四号）
+    body_size: 12                           # 正文字号（小四）
+    line_spacing: 1.5                       # 行距倍数
+    page_width: 21                          # A4 宽度（cm）
+    page_height: 29.7                       # A4 高度（cm）
+    margin_top: 2.54
+    margin_bottom: 2.54
+    margin_left: 3.18
+    margin_right: 3.18
+
+  placeholder:
+    prefix: "【"
+    suffix: "】"
+    fill_format: "【请填写】"
+    money_format: "人民币 【XXX】 元"
+    date_format: "【YYYY年MM月DD日】"

@@ -1,0 +1,1 @@
+conda activate data && python -m server.main

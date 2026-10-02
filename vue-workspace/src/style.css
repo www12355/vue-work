@@ -1,0 +1,401 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent: var(--accent);
+  --color-ring: var(--ring);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-lg: var(--radius);
+}
+
+:root {
+  color-scheme: light;
+  --background: oklch(0.93 0.002 250);
+  --foreground: oklch(0.18 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0 0);
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.5 0 0);
+  --brand: oklch(0.58 0.19 277);
+  --brand-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.58 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --accent: oklch(0.55 0.11 185);
+  --border: oklch(0.88 0 0);
+  --ring: oklch(0.58 0.19 277);
+  --radius: 0.625rem;
+
+  /* —— 统一圆角尺度：只保留 3 级 + 胶囊，杜绝多种圆角混用 —— */
+  --r-lg: 1.75rem; /* 卡片 / 面板（呼应首页主卡 2rem） */
+  --r-md: 1rem; /* 嵌套区块 / 列表行 */
+  --r-sm: 0.75rem; /* 输入框 / 小控件 */
+
+  /* —— 柔性内凹（well）：保留拟态触感，用于嵌套区块与输入框 —— */
+  --neu-surface: oklch(0.93 0.002 250);
+  --neu-shadow: oklch(0.79 0.002 250);
+  --neu-highlight: oklch(1 0 0);
+
+  /* —— 抬升阴影：三级层次，取代过重的 30px 拟态投影 —— */
+  --shadow-1: 0 1px 2px oklch(0.2 0 0 / 0.04), 0 2px 8px oklch(0.2 0 0 / 0.05);
+  --shadow-2: 0 2px 4px oklch(0.2 0 0 / 0.04), 0 10px 28px oklch(0.2 0 0 / 0.08);
+  --shadow-3: 0 4px 10px oklch(0.2 0 0 / 0.05), 0 20px 48px oklch(0.2 0 0 / 0.12);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --ring: oklch(0.556 0 0);
+  --accent: oklch(0.72 0.1 185);
+  --destructive: oklch(0.65 0.2 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  /* 深色主题：内凹面略低于卡面，投影更深 */
+  --neu-surface: oklch(0.17 0 0);
+  --neu-shadow: oklch(0.1 0 0);
+  --neu-highlight: oklch(0.25 0 0);
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.3), 0 2px 8px oklch(0 0 0 / 0.28);
+  --shadow-2: 0 2px 4px oklch(0 0 0 / 0.32), 0 10px 28px oklch(0 0 0 / 0.42);
+  --shadow-3: 0 4px 10px oklch(0 0 0 / 0.35), 0 20px 48px oklch(0 0 0 / 0.55);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* 按钮无障碍焦点环 */
+button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ---------- 背景网格：小格 + 每 4 格一条主线 ---------- */
+.bg-grid {
+  --grid-size: 40px;
+  --grid-line: color-mix(in oklch, var(--foreground) 7%, transparent);
+  --grid-line-major: color-mix(in oklch, var(--foreground) 12%, transparent);
+  background-image:
+    linear-gradient(to right, var(--grid-line-major) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line-major) 1px, transparent 1px),
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size:
+    calc(var(--grid-size) * 4) calc(var(--grid-size) * 4),
+    calc(var(--grid-size) * 4) calc(var(--grid-size) * 4),
+    var(--grid-size) var(--grid-size),
+    var(--grid-size) var(--grid-size);
+  mask-image: linear-gradient(to bottom, oklch(0 0 0) 0%, oklch(0 0 0) 45%, transparent 95%);
+}
+
+/* ---------- 弹窗入场动画（替代 tw-animate-css） ---------- */
+@keyframes ws-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ws-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.ws-fade-in {
+  animation: ws-fade-in 0.2s ease-out;
+}
+.ws-zoom-in {
+  animation: ws-zoom-in 0.3s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-fade-in,
+  .ws-zoom-in {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   共享设计系统（用于非首页：个人中心 / 登录 / 后台 / 待开发 / 计费弹窗）
+   首页工作台保持原有深色编辑风，不引入这些类。
+   放在 @layer components 内，以便 Tailwind 工具类（pl-10 / w-28 等）可正常覆盖。
+   ============================================================ */
+@layer components {
+
+/* 抬升卡片：白色卡面浮在灰底之上，建立清晰层级（顶边高光保留柔性质感） */
+.ios-card {
+  background-color: var(--card);
+  border: 1px solid color-mix(in oklch, var(--foreground) 6%, transparent);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+}
+
+/* 内凹区块：嵌套在卡片内的行/区域，压入表面 */
+.neu-inset {
+  background-color: color-mix(in oklch, var(--background) 70%, var(--card));
+  border: none;
+  border-radius: var(--r-md);
+  box-shadow:
+    inset 2px 2px 5px var(--neu-shadow),
+    inset -2px -2px 5px var(--neu-highlight);
+}
+
+/* 深色面板：呼应首页深色主卡，用于强调区（统计 / 品牌侧栏） */
+.surface-dark {
+  background-color: oklch(0.18 0 0);
+  color: oklch(0.98 0 0);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3);
+}
+
+/* 悬停抬升：上浮 + 阴影加深 */
+.ios-hover {
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease;
+  will-change: transform;
+}
+.ios-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-3);
+}
+
+/* 光泽扫过：卡片内加一个 .ios-sheen 元素即可 */
+.ios-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    color-mix(in oklch, white 28%, transparent) 45%,
+    transparent 60%
+  );
+  transform: translateX(-120%);
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ios-hover:hover .ios-sheen {
+  transform: translateX(120%);
+}
+
+/* ============================================================
+   统一控件层：输入框 / 按钮 / 标签
+   全站共用，避免各页面各写一套边框与圆角。
+   ============================================================ */
+
+/* 输入框：内凹式，无描边，聚焦时品牌色环 */
+.field {
+  width: 100%;
+  background-color: color-mix(in oklch, var(--background) 70%, var(--card));
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  outline: none;
+  box-shadow: inset 2px 2px 5px var(--neu-shadow), inset -2px -2px 5px var(--neu-highlight);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.field::placeholder {
+  color: var(--muted-foreground);
+}
+.field:focus {
+  border-color: var(--brand);
+  box-shadow:
+    inset 2px 2px 5px var(--neu-shadow),
+    inset -2px -2px 5px var(--neu-highlight),
+    0 0 0 3px color-mix(in oklch, var(--brand) 18%, transparent);
+}
+.field:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 下拉框：去掉原生外观，换成统一的自绘箭头 */
+select.field {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23808080' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  cursor: pointer;
+}
+
+/* 按钮：统一胶囊形，呼应首页主卡的圆头按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  padding: 0 1.25rem;
+  height: 2.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease,
+    opacity 0.2s ease;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+.btn-sm {
+  height: 2.25rem;
+  padding: 0 0.9rem;
+  font-size: 0.8125rem;
+}
+
+/* 主按钮：品牌紫实心 */
+.btn-primary {
+  background-color: var(--brand);
+  color: var(--brand-foreground);
+  box-shadow: var(--shadow-1);
+}
+.btn-primary:not(:disabled):hover {
+  box-shadow: var(--shadow-2);
+}
+
+/* 深色按钮：呼应首页深色主卡 */
+.btn-dark {
+  background-color: oklch(0.18 0 0);
+  color: oklch(0.98 0 0);
+  box-shadow: var(--shadow-1);
+}
+.dark .btn-dark {
+  background-color: oklch(0.98 0 0);
+  color: oklch(0.18 0 0);
+}
+
+/* 次级按钮：卡面色 + 细描边 */
+.btn-soft {
+  background-color: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-1);
+}
+.btn-soft:not(:disabled):hover {
+  background-color: var(--muted);
+}
+
+/* 幽灵按钮：无底色 */
+.btn-ghost {
+  color: var(--muted-foreground);
+}
+.btn-ghost:not(:disabled):hover {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+/* 危险按钮 */
+.btn-danger {
+  color: var(--destructive);
+}
+.btn-danger:not(:disabled):hover {
+  background-color: color-mix(in oklch, var(--destructive) 12%, transparent);
+}
+
+/* 标签：胶囊小徽标 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background-color: var(--muted);
+  color: var(--muted-foreground);
+}
+.chip-brand {
+  background-color: color-mix(in oklch, var(--brand) 12%, transparent);
+  color: var(--brand);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:not(:disabled):hover {
+    transform: none;
+  }
+}
+
+/* 翻转卡片：外层 .flip-card 定高，hover 或 .is-flipped 时翻面 */
+.flip-card {
+  display: block;
+  perspective: 1200px;
+}
+/* 内层若为 <span> 需显式转为块级，否则宽高失效、卡面会塌陷 */
+.flip-card-inner {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-style: preserve-3d;
+}
+.flip-card:hover .flip-card-inner,
+.flip-card.is-flipped .flip-card-inner {
+  transform: rotateY(180deg);
+}
+.flip-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.flip-face-back {
+  transform: rotateY(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ios-hover,
+  .flip-card-inner,
+  .ios-sheen {
+    transition: none;
+  }
+  .flip-card:hover .flip-card-inner {
+    transform: none;
+  }
+}
+
+} /* end @layer components */

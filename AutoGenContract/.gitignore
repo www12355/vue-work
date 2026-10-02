@@ -1,0 +1,34 @@
+# Pipeline cache (v2.0)
+.cache/
+
+# Legacy workspace directory
+workspaces/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output
+output/*.docx
+output/*.md
+
+# Config with secrets
+config.yaml
+
+# Temp files
+*.tmp
+.temp/

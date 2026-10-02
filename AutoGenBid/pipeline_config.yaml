@@ -1,0 +1,725 @@
+input:
+  bid_docx: 标书文件.docx
+output:
+  dir: .cache
+  clean_dir: output
+template:
+  search: true
+  extract_to: templates/template.docx
+task:
+  package_id: null
+  technical_only: true
+proposal_set:
+  winning:
+    id: bid_00_winning
+    name: 中标方案
+    tech_stack_id: data_platform
+    team_profile_id: large_penetration
+    delivery_days: 180
+    writing_rules:
+    - 全文直接输出投标技术方案正文，不输出过程报告、解释或占位符。
+    - 技术路线必须与所选技术栈逐项一致，不得引用未配置的核心技术。
+    - 团队配置必须与所选团队方案一致，体现角色职责和投入边界。
+    - 工期安排必须按 delivery_days 折算为日历天计划，不再使用月份作为主口径。
+    - 所有章节必须围绕招标需求展开，突出可落地实施路径、风险控制和验收指标。
+  reference_1:
+    id: bid_01
+    name: 参考方案 1
+    tech_stack_id: reference_java_classic
+    team_profile_id: small_research_dev
+    delivery_days: 240
+    writing_rules:
+    - 输出正式、完整且可落地的投标技术方案正文。
+    - 技术路线、团队和工期必须完全使用当前方案配置。
+    - 所有章节围绕招标需求展开，体现稳定交付和实施边界。
+  reference_2:
+    id: bid_02
+    name: 参考方案 2
+    tech_stack_id: reference_php_legacy
+    team_profile_id: small_research_dev
+    delivery_days: 270
+    writing_rules:
+    - 输出正式、完整且可落地的投标技术方案正文。
+    - 技术路线、团队和工期必须完全使用当前方案配置。
+    - 所有章节围绕招标需求展开，体现智能化能力和风险控制。
+claude:
+  timeout: 600
+  max_retries: 3
+  min_output_size: 200
+  allowed_tools:
+  - Read
+  - Write
+  - Bash
+  - Glob
+  - Grep
+stages:
+- id: 0
+  name: 标书文档解析
+  description: 解析 uploads/ 下核心标书 .docx 文件，提取文本、表格、图片和章节结构
+  cache_dir: 01_parsed
+  enabled: true
+- id: 1
+  name: 标书总结
+  description: 基于解析结果和参考文件生成标书总结
+  cache_dir: 02_summary
+  enabled: true
+- id: 2
+  name: 需求提取
+  description: 从标书内容中提取结构化需求清单
+  cache_dir: 03_requirements
+  enabled: true
+- id: 3
+  name: 技术章节定位
+  description: 用 regex 定位技术方案标号并生成章节编号映射
+  cache_dir: 04_template
+  enabled: true
+- id: 4
+  name: 默认格式准备
+  description: 直接使用默认 DOCX 格式，不从标书或参考文档学习格式
+  cache_dir: 05_format
+  enabled: true
+- id: 5
+  name: 投标策略生成
+  description: 按 pipeline_config.yaml 生成主方案策略
+  cache_dir: 06_strategies
+  enabled: true
+- id: 6
+  name: 技术方案生成
+  description: 使用 AI 生成中标技术方案内容
+  cache_dir: 07_bids
+  enabled: true
+- id: 7
+  name: 模板拼接跳过
+  description: 已禁用格式模板拼接，仅保留独立文档导出
+  cache_dir: 08_filled
+  enabled: true
+- id: 8
+  name: DOCX导出
+  description: 使用默认格式导出 docx
+  cache_dir: 09_exported
+  enabled: true
+- id: 9
+  name: 应答表生成
+  description: 基于技术方案和需求清单生成技术一对一应答表
+  cache_dir: 10_response_tables
+  enabled: true
+- id: 10
+  name: 独立文档导出
+  description: 导出 output/技术方案.docx 和 技术一对一应答表.docx
+  cache_dir: 11_final
+  enabled: true
+format:
+  image_placeholders: true
+  reference_docx: 标书/系统性能设计方案评价.docx
+  reference_txt: 标书/项目服务方案_01.txt
+  default_format_template: null
+  generate_toc: true
+  generate_response_table: true
+  company_info:
+    name: ''
+    address: ''
+    contact_name: ''
+    contact_phone: ''
+    contact_email: ''
+team_profiles:
+  small_penetration:
+    id: small_penetration
+    size: small
+    focus: penetration
+    name: 小型渗透安全团队
+    summary: 6人轻量团队，强调安全评估、漏洞验证和基础研发交付。
+    total: 6
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 统筹进度、风险和验收沟通
+    - role: 安全测试工程师
+      count: 2
+      focus: 渗透测试、漏洞复核、安全加固建议
+    - role: 后端开发工程师
+      count: 1
+      focus: 接口实现和安全整改
+    - role: 前端开发工程师
+      count: 1
+      focus: 页面开发和交互联调
+    - role: 测试工程师
+      count: 1
+      focus: 功能回归和缺陷跟踪
+  small_database:
+    id: small_database
+    size: small
+    focus: database
+    name: 小型数据库团队
+    summary: 6人轻量团队，强调数据建模、数据库优化和稳定交付。
+    total: 6
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 统筹需求、排期和交付质量
+    - role: 数据库工程师
+      count: 2
+      focus: 数据模型、SQL优化、备份恢复
+    - role: 后端开发工程师
+      count: 2
+      focus: 数据接口、业务逻辑和集成
+    - role: 测试工程师
+      count: 1
+      focus: 数据一致性和功能验证
+  small_ai:
+    id: small_ai
+    size: small
+    focus: ai
+    name: 小型人工智能团队
+    summary: 6人轻量团队，强调模型接入、数据处理和智能功能验证。
+    total: 6
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 统筹AI功能边界和交付节奏
+    - role: AI工程师
+      count: 2
+      focus: 模型接入、提示词策略、效果评估
+    - role: 数据工程师
+      count: 1
+      focus: 数据清洗、特征整理和质量控制
+    - role: 后端开发工程师
+      count: 1
+      focus: AI服务封装和接口集成
+    - role: 测试工程师
+      count: 1
+      focus: 功能验证和效果回归
+  small_research_dev:
+    id: small_research_dev
+    size: small
+    focus: research_dev
+    name: 小型研发交付团队
+    summary: 6人轻量团队，强调快速研发、前后端联调和基础运维。
+    total: 6
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 需求拆解和交付协调
+    - role: 后端开发工程师
+      count: 2
+      focus: 核心服务、接口和数据处理
+    - role: 前端开发工程师
+      count: 1
+      focus: 业务页面和交互实现
+    - role: 测试工程师
+      count: 1
+      focus: 测试执行和缺陷闭环
+    - role: 运维工程师
+      count: 1
+      focus: 部署、监控和环境维护
+  medium_penetration:
+    id: medium_penetration
+    size: medium
+    focus: penetration
+    name: 中型渗透安全团队
+    summary: 12人常规团队，强化安全架构、攻防验证和整改闭环。
+    total: 12
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 统筹项目治理和验收
+    - role: 安全架构师
+      count: 1
+      focus: 安全体系设计和风险评估
+    - role: 安全测试工程师
+      count: 3
+      focus: 渗透测试、漏洞验证、攻击面分析
+    - role: 后端开发工程师
+      count: 3
+      focus: 服务开发和安全整改
+    - role: 前端开发工程师
+      count: 1
+      focus: 前端交互和安全联调
+    - role: 数据库工程师
+      count: 1
+      focus: 权限、审计和备份策略
+    - role: 测试工程师
+      count: 1
+      focus: 回归测试和验收验证
+    - role: 运维工程师
+      count: 1
+      focus: 部署加固和监控
+  medium_database:
+    id: medium_database
+    size: medium
+    focus: database
+    name: 中型数据库团队
+    summary: 12人常规团队，强化数据架构、治理、迁移和性能优化。
+    total: 12
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 统筹数据工程交付
+    - role: 数据架构师
+      count: 1
+      focus: 模型规划和数据标准
+    - role: 数据库工程师
+      count: 3
+      focus: 库表设计、性能优化、备份恢复
+    - role: 数据治理工程师
+      count: 2
+      focus: 数据质量、元数据和口径管理
+    - role: 后端开发工程师
+      count: 2
+      focus: 数据接口和业务服务
+    - role: 前端开发工程师
+      count: 1
+      focus: 数据展示和管理页面
+    - role: 测试工程师
+      count: 1
+      focus: 数据准确性和回归验证
+    - role: 运维工程师
+      count: 1
+      focus: 环境维护和监控告警
+  medium_ai:
+    id: medium_ai
+    size: medium
+    focus: ai
+    name: 中型人工智能团队
+    summary: 12人常规团队，强化模型工程、数据闭环和智能应用落地。
+    total: 12
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 统筹智能化目标和验收口径
+    - role: AI架构师
+      count: 1
+      focus: 模型路线、推理架构和效果指标
+    - role: AI工程师
+      count: 3
+      focus: 模型接入、微调、评估和优化
+    - role: 数据工程师
+      count: 2
+      focus: 数据清洗、标注协同和样本治理
+    - role: 后端开发工程师
+      count: 2
+      focus: AI服务封装和业务接口
+    - role: 前端开发工程师
+      count: 1
+      focus: 智能应用交互和可视化
+    - role: 测试工程师
+      count: 1
+      focus: 功能测试和效果回归
+    - role: 运维工程师
+      count: 1
+      focus: 模型服务部署和运行监控
+  medium_research_dev:
+    id: medium_research_dev
+    size: medium
+    focus: research_dev
+    name: 中型研发交付团队
+    summary: 12人常规团队，强化架构设计、并行研发和质量闭环。
+    total: 12
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 项目治理和资源协调
+    - role: 技术架构师
+      count: 1
+      focus: 架构设计和技术把关
+    - role: 后端开发工程师
+      count: 4
+      focus: 核心服务、接口和业务逻辑
+    - role: 前端开发工程师
+      count: 2
+      focus: 业务页面、组件和可视化
+    - role: 测试工程师
+      count: 2
+      focus: 测试计划、自动化和回归
+    - role: 数据库工程师
+      count: 1
+      focus: 数据模型和性能优化
+    - role: 运维工程师
+      count: 1
+      focus: 部署、监控和环境保障
+  large_penetration:
+    id: large_penetration
+    size: large
+    focus: penetration
+    name: 大型渗透安全团队
+    summary: 18人复杂项目团队，覆盖安全架构、攻防测试、整改研发和运维加固。
+    total: 18
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 总体统筹和质量验收
+    - role: 安全总架构师
+      count: 1
+      focus: 安全架构和等级保护口径
+    - role: 安全测试工程师
+      count: 5
+      focus: 渗透测试、红队验证、漏洞复核
+    - role: 后端开发工程师
+      count: 4
+      focus: 服务开发和安全整改
+    - role: 前端开发工程师
+      count: 2
+      focus: 前端实现和安全联调
+    - role: 数据库工程师
+      count: 2
+      focus: 数据权限、审计、备份和恢复
+    - role: 测试工程师
+      count: 2
+      focus: 回归验证和验收测试
+    - role: 运维工程师
+      count: 1
+      focus: 部署加固和运行监控
+  large_database:
+    id: large_database
+    size: large
+    focus: database
+    name: 大型数据库团队
+    summary: 18人复杂项目团队，覆盖数据架构、治理、开发、迁移和运维。
+    total: 18
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 数据工程总体统筹
+    - role: 数据总架构师
+      count: 1
+      focus: 数据架构、标准和质量体系
+    - role: 数据库工程师
+      count: 5
+      focus: 数据库设计、调优、迁移和容灾
+    - role: 数据治理工程师
+      count: 3
+      focus: 元数据、主数据、质量规则和口径管理
+    - role: 后端开发工程师
+      count: 3
+      focus: 数据服务和业务接口
+    - role: 前端开发工程师
+      count: 2
+      focus: 数据管理和可视化页面
+    - role: 测试工程师
+      count: 2
+      focus: 数据准确性、性能和回归验证
+    - role: 运维工程师
+      count: 1
+      focus: 运行监控和备份恢复演练
+  large_ai:
+    id: large_ai
+    size: large
+    focus: ai
+    name: 大型人工智能团队
+    summary: 18人复杂项目团队，覆盖AI架构、模型工程、数据治理、应用开发和运维。
+    total: 18
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 智能化交付统筹
+    - role: AI总架构师
+      count: 1
+      focus: AI技术路线、模型治理和指标体系
+    - role: AI工程师
+      count: 5
+      focus: 模型接入、微调、评估和推理优化
+    - role: 数据工程师
+      count: 3
+      focus: 数据清洗、特征处理和样本管理
+    - role: 后端开发工程师
+      count: 3
+      focus: AI服务、业务接口和权限控制
+    - role: 前端开发工程师
+      count: 2
+      focus: 智能交互和可视化界面
+    - role: 测试工程师
+      count: 2
+      focus: 功能测试、效果评估和回归验证
+    - role: 运维工程师
+      count: 1
+      focus: 模型服务部署、监控和容量规划
+  large_research_dev:
+    id: large_research_dev
+    size: large
+    focus: research_dev
+    name: 大型研发交付团队
+    summary: 18人复杂项目团队，覆盖架构、研发、测试、数据库和运维交付。
+    total: 18
+    roles:
+    - role: 项目经理
+      count: 1
+      focus: 计划、资源和验收统筹
+    - role: 技术总架构师
+      count: 1
+      focus: 架构路线、关键设计和技术评审
+    - role: 后端开发工程师
+      count: 6
+      focus: 核心服务、接口集成和业务流程
+    - role: 前端开发工程师
+      count: 3
+      focus: 复杂页面、组件体系和可视化
+    - role: 测试工程师
+      count: 3
+      focus: 测试体系、自动化和验收验证
+    - role: 数据库工程师
+      count: 2
+      focus: 数据模型、性能优化和备份策略
+    - role: 运维工程师
+      count: 2
+      focus: 部署发布、监控告警和应急响应
+tech_stacks:
+  modern_ai:
+    id: modern_ai
+    tier: winning
+    name: 现代AI智能技术方案
+    summary: 面向智能化分析、数据治理和高并发服务的现代云原生技术栈。
+    rows:
+    - key: backend_lang
+      label: 后端语言
+      value: Python 3.11
+    - key: backend_framework
+      label: 后端框架
+      value: FastAPI + LangChain + Celery
+    - key: web_server
+      label: Web服务器
+      value: Nginx + Gunicorn + Uvicorn
+    - key: orm
+      label: ORM/迁移
+      value: SQLAlchemy 2.0 + Alembic
+    - key: database
+      label: 数据库
+      value: PostgreSQL 15 + Redis 7
+    - key: build_tool
+      label: 构建工具
+      value: Poetry + Docker Compose
+    - key: data_processing
+      label: 数据处理
+      value: Pandas 2.0, Polars, PySpark 3.4
+    - key: ai_ml
+      label: AI/ML
+      value: PyTorch 2.0, Transformers 4.x, scikit-learn 1.3, LLM, NLP/NER
+    - key: frontend
+      label: 前端
+      value: Vue 3 + TypeScript + Vite + ECharts 5 + Element Plus
+    - key: deployment
+      label: 部署
+      value: Docker + Kubernetes，支持国产化服务器适配
+    - key: containerization
+      label: 容器化
+      value: Docker + K8s 容器编排
+  java_enterprise:
+    id: java_enterprise
+    tier: winning
+    name: Java企业级技术方案
+    summary: 面向政企系统、业务流程和稳定集成的企业级 Java 技术栈。
+    rows:
+    - key: backend_lang
+      label: 后端语言
+      value: Java 17
+    - key: backend_framework
+      label: 后端框架
+      value: Spring Boot 3 + Spring Cloud
+    - key: web_server
+      label: Web服务器
+      value: Nginx + Tomcat
+    - key: orm
+      label: ORM/迁移
+      value: MyBatis Plus + Flyway
+    - key: database
+      label: 数据库
+      value: PostgreSQL / MySQL + Redis
+    - key: build_tool
+      label: 构建工具
+      value: Maven + Jenkins
+    - key: data_processing
+      label: 数据处理
+      value: Apache POI, EasyExcel, Flink
+    - key: ai_ml
+      label: AI/ML
+      value: 可集成模型服务 API
+    - key: frontend
+      label: 前端
+      value: Vue 3 + TypeScript + Element Plus
+    - key: deployment
+      label: 部署
+      value: Docker Compose / Kubernetes
+    - key: containerization
+      label: 容器化
+      value: Docker 镜像和容器编排
+  data_platform:
+    id: data_platform
+    tier: winning
+    name: 数据治理平台技术方案
+    summary: 面向数据汇聚、治理、质量监控和可视化分析的数据平台技术栈。
+    rows:
+    - key: backend_lang
+      label: 后端语言
+      value: Python 3.11 + Java 17
+    - key: backend_framework
+      label: 后端框架
+      value: FastAPI + Spring Boot
+    - key: web_server
+      label: Web服务器
+      value: Nginx + Uvicorn
+    - key: orm
+      label: ORM/迁移
+      value: SQLAlchemy + MyBatis Plus
+    - key: database
+      label: 数据库
+      value: PostgreSQL + ClickHouse + Redis
+    - key: build_tool
+      label: 构建工具
+      value: Poetry + Maven + Docker Compose
+    - key: data_processing
+      label: 数据处理
+      value: Spark, Flink, Airflow, dbt
+    - key: ai_ml
+      label: AI/ML
+      value: 异常检测、规则推荐、语义检索
+    - key: frontend
+      label: 前端
+      value: Vue 3 + ECharts + AntV
+    - key: deployment
+      label: 部署
+      value: Kubernetes + 对象存储 + 调度平台
+    - key: containerization
+      label: 容器化
+      value: Docker + Helm
+  reference_java_classic:
+    id: reference_java_classic
+    tier: reference
+    name: Java经典交付方案
+    summary: 面向传统政企应用的经典 Java 单体部署方案，侧重稳定业务交付。
+    rows:
+    - key: backend_lang
+      label: 后端语言
+      value: Java 8
+    - key: backend_framework
+      label: 后端框架
+      value: Spring MVC + Spring 4
+    - key: database
+      label: 数据库
+      value: MySQL 5.7
+    - key: frontend
+      label: 前端
+      value: jQuery + Bootstrap 3
+    - key: deployment
+      label: 部署
+      value: Tomcat 单机部署
+    - key: delivery
+      label: 交付方式
+      value: 人工发布与月度维护
+  reference_php_legacy:
+    id: reference_php_legacy
+    tier: reference
+    name: PHP传统业务方案
+    summary: 面向轻量业务门户的 PHP 传统技术方案，采用成熟的单体架构。
+    rows:
+    - key: backend_lang
+      label: 后端语言
+      value: PHP 7.4
+    - key: backend_framework
+      label: 后端框架
+      value: Laravel 6
+    - key: database
+      label: 数据库
+      value: MySQL 5.7
+    - key: frontend
+      label: 前端
+      value: Vue 2 + Bootstrap
+    - key: deployment
+      label: 部署
+      value: Linux 虚拟机 + Nginx
+    - key: delivery
+      label: 交付方式
+      value: 手工部署与基础监控
+  reference_python_classic:
+    id: reference_python_classic
+    tier: reference
+    name: Python基础智能方案
+    summary: 面向基础数据处理和规则分析的 Python 方案，强调轻量实现。
+    rows:
+    - key: backend_lang
+      label: 后端语言
+      value: Python 3.8
+    - key: backend_framework
+      label: 后端框架
+      value: Django 2.2
+    - key: database
+      label: 数据库
+      value: MySQL 5.7 + Redis 5
+    - key: data_processing
+      label: 数据处理
+      value: Pandas + 定时脚本
+    - key: ai_ml
+      label: AI/ML
+      value: 规则引擎与基础分类模型
+    - key: deployment
+      label: 部署
+      value: Docker Compose 单机部署
+  reference_dotnet_standard:
+    id: reference_dotnet_standard
+    tier: reference
+    name: .NET标准应用方案
+    summary: 面向常规管理系统的 .NET 标准方案，适合基础业务信息化。
+    rows:
+    - key: backend_lang
+      label: 后端语言
+      value: C# + .NET Framework 4.8
+    - key: backend_framework
+      label: 后端框架
+      value: ASP.NET MVC 5
+    - key: database
+      label: 数据库
+      value: SQL Server 2016
+    - key: frontend
+      label: 前端
+      value: Razor + jQuery
+    - key: deployment
+      label: 部署
+      value: IIS 单机部署
+    - key: delivery
+      label: 交付方式
+      value: 人工发布与定期巡检
+  reference_data_basic:
+    id: reference_data_basic
+    tier: reference
+    name: 基础数据汇总方案
+    summary: 面向报表汇总和基础数据交换的数据处理方案，强调批量稳定运行。
+    rows:
+    - key: backend_lang
+      label: 后端语言
+      value: Java 8
+    - key: data_processing
+      label: 数据处理
+      value: ETL 脚本 + 定时任务
+    - key: database
+      label: 数据库
+      value: MySQL 5.7
+    - key: reporting
+      label: 报表能力
+      value: Excel 导出 + 固定报表
+    - key: deployment
+      label: 部署
+      value: 单机服务部署
+    - key: delivery
+      label: 交付方式
+      value: 人工数据核验
+  reference_lowcode_delivery:
+    id: reference_lowcode_delivery
+    tier: reference
+    name: 低代码快速交付方案
+    summary: 面向表单、流程和基础台账的低代码交付方案，强调快速配置。
+    rows:
+    - key: platform
+      label: 开发平台
+      value: 低代码表单与流程平台
+    - key: backend_lang
+      label: 扩展语言
+      value: JavaScript + Java 插件
+    - key: database
+      label: 数据库
+      value: MySQL 5.7
+    - key: frontend
+      label: 前端
+      value: 平台内置组件
+    - key: deployment
+      label: 部署
+      value: 单节点应用服务器
+    - key: delivery
+      label: 交付方式
+      value: 配置化开发与人工运维

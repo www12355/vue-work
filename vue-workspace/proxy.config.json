@@ -1,0 +1,16 @@
+[
+  {
+    "path": "/api/tender",
+    "target": "http://localhost:8001",
+    "changeOrigin": true,
+    "stripPrefix": true,
+    "ws": true
+  },
+  {
+    "path": "/api/contract",
+    "target": "http://localhost:8002",
+    "changeOrigin": true,
+    "stripPrefix": true,
+    "ws": true
+  }
+]
