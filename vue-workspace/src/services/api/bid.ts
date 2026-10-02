@@ -107,6 +107,25 @@ export async function fetchBidFileContent(
   return typeof resp === "string" ? resp : resp?.content ?? JSON.stringify(resp)
 }
 
+/** 构建 docx → PDF 预览 URL（后端在线转换，用于 iframe 预览） */
+export function bidDocxAsPdfUrl(sessionId: string, filePath: string): string {
+  return bid().resolveUrl(
+    `/api/session/${sessionId}/docx-as-pdf?path=${encodeURIComponent(filePath)}`,
+  )
+}
+
+/** 构建文件内容直读 URL（用于 iframe / img 直接预览 pdf、图片等） */
+export function bidFileContentUrl(sessionId: string, filePath: string): string {
+  return bid().resolveUrl(
+    `/api/session/${sessionId}/file-content?path=${encodeURIComponent(filePath)}`,
+  )
+}
+
+/** 构建上传 URL（配合 xhrUploadFile 做字节级进度上传） */
+export function bidUploadUrl(sessionId: string, uploadType: "uploads" | "profile"): string {
+  return bid().resolveUrl(`/api/session/${sessionId}/upload?type=${uploadType}`)
+}
+
 /** 获取输出文件列表（{ session_id, files: FileInfo[] }） */
 export async function fetchBidFiles(sessionId: string): Promise<FileInfo[]> {
   const resp = await bid().get(`/api/session/${sessionId}/files`)

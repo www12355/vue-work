@@ -31,8 +31,17 @@ export function usePipeline(stageDefs: StageDef[]) {
   const currentStageId = ref(-1)
   const outputFiles = reactive<FileInfo[]>([])
   const pipelineError = ref<string | null>(null)
-  const statusMessages = reactive<string[]>([])
+  /** 运行日志（阶段起止、进度、回显），带级别与时间戳，供日志控制台展示 */
+  const statusMessages = reactive<{ level: "info" | "success" | "error"; text: string; time: string }[]>([])
   const startTime = ref<number | null>(null)
+
+  const MAX_LOGS = 200
+
+  function addLog(level: "info" | "success" | "error", text: string) {
+    if (!text) return
+    statusMessages.push({ level, text, time: new Date().toLocaleTimeString("zh-CN", { hour12: false }) })
+    if (statusMessages.length > MAX_LOGS) statusMessages.splice(0, statusMessages.length - MAX_LOGS)
+  }
 
   const totalStages = stageDefs.length
   const completedCount = computed(() => stages.filter((s) => s.status === "completed").length)
@@ -66,6 +75,7 @@ export function usePipeline(stageDefs: StageDef[]) {
         }
         phase.value = "processing"
         if (!startTime.value) startTime.value = Date.now()
+        addLog("info", msg.message || (msg.stage ? `开始：${msg.stage.name}` : ""))
         break
 
       case "stage_complete":
@@ -80,6 +90,7 @@ export function usePipeline(stageDefs: StageDef[]) {
         overallProgress.value = Math.round(
           ((completedCount.value + 1) / totalStages) * 100,
         )
+        addLog("success", msg.message || (msg.stage ? `完成：${msg.stage.name}` : ""))
         break
 
       case "stage_failed":
@@ -93,15 +104,12 @@ export function usePipeline(stageDefs: StageDef[]) {
         }
         pipelineError.value = msg.error || msg.message || "阶段执行失败"
         phase.value = "failed"
+        addLog("error", msg.message || msg.error || (msg.stage ? `失败：${msg.stage.name}` : "阶段执行失败"))
         break
 
       case "progress":
         overallProgress.value = msg.progress_pct ?? overallProgress.value
-        if (msg.message) {
-          statusMessages.push(msg.message)
-          /* 只保留最近 20 条 */
-          if (statusMessages.length > 20) statusMessages.shift()
-        }
+        addLog("info", msg.message || msg.detail || "")
         break
 
       case "pipeline_complete":
@@ -115,13 +123,13 @@ export function usePipeline(stageDefs: StageDef[]) {
         if (Array.isArray(msg.files)) {
           outputFiles.splice(0, outputFiles.length, ...msg.files)
         }
+        addLog("success", msg.message || "生成完成！")
         break
 
       case "pipeline_failed":
         phase.value = "failed"
         pipelineError.value = msg.error || msg.message || "流水线执行失败"
-        /* 记录失败详情到日志 */
-        statusMessages.push(`❌ 流水线失败: ${pipelineError.value}`)
+        addLog("error", `❌ 流水线失败: ${pipelineError.value}`)
         break
 
       case "stage_definitions":
@@ -143,10 +151,7 @@ export function usePipeline(stageDefs: StageDef[]) {
         break
 
       case "echo":
-        if (msg.message) {
-          statusMessages.push(msg.message)
-          if (statusMessages.length > 20) statusMessages.shift()
-        }
+        addLog((msg.level as "info" | "success" | "error") || "info", msg.message || "")
         break
 
       default:

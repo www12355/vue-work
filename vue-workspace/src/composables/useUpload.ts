@@ -67,49 +67,7 @@ export function useUpload(
     return Math.round(sum / all.length)
   })
 
-  /* 单个文件 XHR 上传 */
-  function xhrUpload(
-    file: File,
-    url: string,
-    onProgress: (pct: number) => void,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      const formData = new FormData()
-      /* 后端 multipart 字段名为 files（复数） */
-      formData.append("files", file)
-
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          onProgress(Math.round((e.loaded / e.total) * 100))
-        }
-      })
-
-      xhr.addEventListener("load", () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve()
-        } else {
-          let detail = `HTTP ${xhr.status}`
-          try {
-            const body = JSON.parse(xhr.responseText)
-            detail = body.detail || body.message || detail
-          } catch { /* ignore */ }
-          reject(new Error(detail))
-        }
-      })
-
-      xhr.addEventListener("error", () => reject(new Error("上传失败：网络错误")))
-      xhr.addEventListener("abort", () => reject(new Error("上传已取消")))
-
-      if (signal) {
-        signal.addEventListener("abort", () => xhr.abort())
-      }
-
-      xhr.open("POST", url)
-      xhr.send(formData)
-    })
-  }
+  /* 单个文件 XHR 上传使用模块级 xhrUploadFile（见文件底部），此处不再重复实现 */
 
   /** 添加文件到指定槽位 */
   function addFiles(slot: "core" | "ref", fileList: FileList | File[]) {
@@ -161,7 +119,7 @@ export function useUpload(
         const fileObj = fileMap.get(item.name)
         if (!fileObj) throw new Error(`找不到文件: ${item.name}`)
 
-        await xhrUpload(fileObj, baseUrl, (pct) => {
+        await xhrUploadFile(fileObj, baseUrl, (pct) => {
           item.progress = pct
         })
         item.status = "done"
@@ -250,4 +208,48 @@ export function registerFiles(files: FileList | File[]) {
 /** 注销单个文件 */
 export function unregisterFile(name: string) {
   fileMap.delete(name)
+}
+
+/**
+ * XHR 上传单个文件（multipart 字段名 files，与后端一致），带字节级进度回调。
+ * 供各 App 的 generate 流程与 useUpload 内部共用。
+ */
+export function xhrUploadFile(
+  file: File,
+  url: string,
+  onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const formData = new FormData()
+    formData.append("files", file)
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100))
+    })
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+      } else {
+        let detail = `HTTP ${xhr.status}`
+        try {
+          const body = JSON.parse(xhr.responseText)
+          detail = body.detail || body.message || detail
+        } catch { /* ignore */ }
+        reject(new Error(detail))
+      }
+    })
+
+    xhr.addEventListener("error", () => reject(new Error("上传失败：网络错误")))
+    xhr.addEventListener("abort", () => reject(new Error("上传已取消")))
+
+    if (signal) {
+      signal.addEventListener("abort", () => xhr.abort())
+    }
+
+    xhr.open("POST", url)
+    xhr.send(formData)
+  })
 }

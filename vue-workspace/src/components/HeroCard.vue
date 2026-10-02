@@ -25,7 +25,7 @@ const cornerBottomStyle: CSSProperties = {
 </script>
 
 <template>
-  <div class="relative h-[560px]">
+  <div class="relative h-[560px] lg:h-full">
     <!-- 深色主卡片（含右下延伸区） -->
     <div class="absolute inset-0 overflow-hidden rounded-[2rem] bg-neutral-950 text-white">
       <template v-if="docked">

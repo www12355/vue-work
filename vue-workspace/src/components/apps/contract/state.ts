@@ -1,10 +1,10 @@
 import { computed, reactive } from "vue"
 import {
   createContractSession,
-  uploadContractFile,
   uploadContractText,
   startContractPipeline,
   contractDownloadUrl,
+  contractUploadUrl,
   contractWsUrl,
   fetchContractSessions,
   deleteContractSession,
@@ -12,6 +12,8 @@ import {
   fetchContractFileContent,
   type ContractFormData,
 } from "@/services/api/contract"
+import { validateUploadFiles } from "@/services/fileValidation"
+import { xhrUploadFile } from "@/composables/useUpload"
 import type { DownloadableFile, SessionListItem, FileTreeNode } from "@/services/api/types"
 import { usePipeline } from "@/composables/usePipeline"
 import { useWebSocket } from "@/composables/useWebSocket"
@@ -173,6 +175,14 @@ export function createContractState() {
     s.loading = true
     s.result = ""
 
+    /* 上传前预校验（与后端规则一致），不合法直接报错，不创建会话 */
+    const allFiles = [..._coreFiles, ..._refFiles]
+    const fileError = validateUploadFiles(allFiles)
+    if (fileError) {
+      s.loading = false
+      throw new Error(fileError)
+    }
+
     /* Step 1: 创建 session */
     uploadPhase.current = "uploading"
     uploadPhase.progress = 0
@@ -195,15 +205,16 @@ export function createContractState() {
     const sid = session.session_id
     pipeline.startProcessing(sid)
 
-    /* Step 2: 上传文件 */
-    const allFiles = [..._coreFiles, ..._refFiles]
-    if (allFiles.length) {
-      for (let i = 0; i < allFiles.length; i++) {
-        const file = allFiles[i]
-        const type = _coreFiles.includes(file) ? "uploads" as const : "profile" as const
-        await uploadContractFile(sid, file, type)
-        uploadPhase.progress = Math.round(((i + 1) / allFiles.length) * 100)
-      }
+    /* Step 2: 上传文件（逐文件 XHR，字节级进度） */
+    for (let i = 0; i < allFiles.length; i++) {
+      const file = allFiles[i]
+      const type = _coreFiles.includes(file) ? "uploads" as const : "profile" as const
+      const basePct = (i / allFiles.length) * 100
+      const span = 100 / allFiles.length
+      await xhrUploadFile(file, contractUploadUrl(sid, type), (pct) => {
+        uploadPhase.progress = Math.min(99, Math.round(basePct + (pct / 100) * span))
+      })
+      uploadPhase.progress = Math.round(((i + 1) / allFiles.length) * 100)
     }
 
     /* 上传补充需求文本 */
@@ -211,11 +222,10 @@ export function createContractState() {
       await uploadContractText(sid, s.prompt)
     }
 
-    /* Step 3: 启动 pipeline + WebSocket */
+    /* Step 3: 启动 pipeline + WebSocket（先建 WS 再启动，避免丢最早的阶段消息） */
     uploadPhase.current = "starting"
-    await startContractPipeline(sid)
-
     wsClient.connect(contractWsUrl(sid), pipeline.handleMessage)
+    await startContractPipeline(sid)
 
     s.loading = false
   }

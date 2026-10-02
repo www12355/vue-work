@@ -3,6 +3,7 @@ import { ref, computed, type Component } from "vue"
 import { Loader2, Sparkles, History, FileText, AlertTriangle } from "lucide-vue-next"
 import ResultPanel from "@/components/apps/ResultPanel.vue"
 import PipelineProgress from "@/components/apps/ui/PipelineProgress.vue"
+import LiveFileTree from "@/components/apps/ui/LiveFileTree.vue"
 import MainUpload from "@/components/apps/tender/MainUpload.vue"
 import RefUpload from "@/components/apps/tender/RefUpload.vue"
 import GenConfig from "@/components/apps/tender/GenConfig.vue"
@@ -11,6 +12,7 @@ import TeamConfig from "@/components/apps/tender/TeamConfig.vue"
 import { createTenderState } from "@/components/apps/tender/state"
 import { useLayout } from "@/composables/useLayout"
 import { goToHistory } from "@/stores/view"
+import { bidFileContentUrl } from "@/services/api/bid"
 import type { DownloadableFile } from "@/services/api/types"
 
 const props = defineProps<{ ownerId: string; readonlyMode?: boolean }>()
@@ -29,12 +31,13 @@ const SECTIONS: Record<string, Component> = {
 
 const twoColumns = computed(() => left.value.length > 0 && right.value.length > 0)
 
-/* 视图切换 — 历史记录跳转到独立页面，非弹窗内显示 */
+/* 视图切换 — 历史记录跳转到独立页面，非弹窗内显示
+   注意：ctx 是 reactive 包装，内部 ref 已自动解包，直接读属性即可 */
 const showPipeline = computed(
   () =>
-    ctx.pipeline.isProcessing.value ||
-    ctx.pipeline.isComplete.value ||
-    ctx.pipeline.phase.value === "failed",
+    ctx.pipeline.isProcessing ||
+    ctx.pipeline.isComplete ||
+    ctx.pipeline.phase === "failed",
 )
 
 const showForm = computed(() => !showPipeline.value)
@@ -96,18 +99,29 @@ function onNewSession() {
     <PipelineProgress
       v-if="showPipeline"
       :stages="ctx.pipeline.stages"
-      :current-stage-id="ctx.pipeline.currentStageId.value"
-      :overall-progress="ctx.pipeline.overallProgress.value"
-      :completed-count="ctx.pipeline.completedCount.value"
+      :current-stage-id="ctx.pipeline.currentStageId"
+      :overall-progress="ctx.pipeline.overallProgress"
+      :completed-count="ctx.pipeline.completedCount"
       :total-stages="ctx.pipeline.totalStages"
-      :is-complete="ctx.pipeline.isComplete.value"
-      :is-failed="ctx.pipeline.phase.value === 'failed'"
-      :error="ctx.pipeline.pipelineError.value"
+      :is-complete="ctx.pipeline.isComplete"
+      :is-failed="ctx.pipeline.phase === 'failed'"
+      :error="ctx.pipeline.pipelineError"
       :output-files="ctx.outputDownloads"
-      :estimated-time="ctx.pipeline.estimatedRemainingText.value"
+      :estimated-time="ctx.pipeline.estimatedRemainingText"
+      :logs="ctx.pipeline.statusMessages"
       @back="onBackToForm"
       @new-session="onNewSession"
       @download="onDownload"
+    />
+
+    <!-- 处理期间实时工作区文件树（3 秒轮询） -->
+    <LiveFileTree
+      v-if="showPipeline"
+      :session-id="ctx.pipeline.sessionId"
+      :active="ctx.pipeline.isProcessing"
+      :fetch-tree="ctx.loadCacheTree"
+      :build-download-url="ctx.buildDownloadUrl"
+      :file-content-url="bidFileContentUrl"
     />
 
     <!-- 表单视图 -->

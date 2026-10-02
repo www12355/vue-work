@@ -34,6 +34,7 @@ interface HealthCheckModule {
 const BUILTIN_MODULES: HealthCheckModule[] = [
   { id: "tender",   target: "http://127.0.0.1:8001", path: "/api/tender" },
   { id: "contract", target: "http://127.0.0.1:8002", path: "/api/contract" },
+  // minutes 后端（4002）尚未实现，仅展示状态，不参与 allOk 判定
   { id: "minutes",  target: "http://localhost:4002",  path: "/api/minutes" },
 ]
 
@@ -93,7 +94,10 @@ export function useBackendHealth() {
     initStatuses()
     checking.value = true
     await Promise.allSettled(BUILTIN_MODULES.map((mod) => checkModule(mod)))
-    allOk.value = Object.values(statuses).every((s) => s.ok)
+    /* minutes 后端未实现（4002），不参与整体判定，避免侧栏永远显示"部分离线" */
+    allOk.value = BUILTIN_MODULES
+      .filter((mod) => mod.id !== "minutes")
+      .every((mod) => statuses[mod.id]?.ok)
     checking.value = false
   }
 

@@ -5,6 +5,7 @@
  */
 
 import { ref, computed, watch } from "vue"
+import { marked } from "marked"
 import {
   Trash2,
   RefreshCw,
@@ -25,6 +26,8 @@ import {
   fetchBidCacheTree,
   fetchBidFileContent,
   bidDownloadUrl,
+  bidDocxAsPdfUrl,
+  bidFileContentUrl,
 } from "@/services/api/bid"
 import {
   fetchContractSessions,
@@ -32,6 +35,8 @@ import {
   fetchContractCacheTree,
   fetchContractFileContent,
   contractDownloadUrl,
+  contractDocxAsPdfUrl,
+  contractFileContentUrl,
 } from "@/services/api/contract"
 import type { SessionListItem, FileTreeNode, DownloadableFile } from "@/services/api/types"
 
@@ -45,6 +50,8 @@ const api = computed(() => ({
   fetchCacheTree: isTender.value ? fetchBidCacheTree : fetchContractCacheTree,
   fetchFileContent: isTender.value ? fetchBidFileContent : fetchContractFileContent,
   buildDownloadUrl: isTender.value ? bidDownloadUrl : contractDownloadUrl,
+  docxAsPdfUrl: isTender.value ? bidDocxAsPdfUrl : contractDocxAsPdfUrl,
+  fileContentUrl: isTender.value ? bidFileContentUrl : contractFileContentUrl,
 }))
 
 const pageTitle = computed(() => (isTender.value ? "标书生成 · 历史记录" : "合同生成 · 历史记录"))
@@ -55,7 +62,86 @@ const history = useHistory(historyModule.value)
 const cacheTree = ref<FileTreeNode | null>(null)
 const treeLoading = ref(false)
 const treeError = ref<string | null>(null)
-const viewingFile = ref<{ path: string; content: string } | null>(null)
+
+/* ── 文件预览：按扩展名分派渲染方式（对齐旧版 DocumentViewer 的核心能力）── */
+type PreviewKind = "markdown" | "text" | "pdf" | "docx" | "image" | "unsupported"
+
+interface PreviewState {
+  path: string
+  name: string
+  kind: PreviewKind
+  /** markdown 渲染后的 HTML / 纯文本内容 */
+  text?: string
+  /** iframe / img 的直读地址（pdf、docx 转码、图片） */
+  src?: string
+}
+
+const viewingFile = ref<PreviewState | null>(null)
+const previewLoading = ref(false)
+
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"])
+const TEXT_EXTS = new Set([
+  "txt", "json", "yaml", "yml", "log", "csv", "xml", "html", "htm",
+  "py", "js", "ts", "css", "bat", "sh", "ini", "toml", "conf", "sql",
+])
+
+function extOf(name: string): string {
+  return (name.split(".").pop() ?? "").toLowerCase()
+}
+
+/** fetchFileContent 对二进制返回 Blob，这里统一转成可展示文本 */
+async function toText(value: unknown): Promise<string> {
+  if (value instanceof Blob) return value.text()
+  if (typeof value === "string") return value
+  if (value == null) return ""
+  return JSON.stringify(value, null, 2)
+}
+
+async function onViewFile(node: { path: string; name: string }) {
+  const sid = history.selectedId.value
+  if (!sid) return
+  const ext = extOf(node.name)
+  previewLoading.value = true
+  viewingFile.value = { path: node.path, name: node.name, kind: "text", text: "加载中…" }
+
+  try {
+    if (ext === "docx") {
+      viewingFile.value = {
+        path: node.path, name: node.name, kind: "docx",
+        src: api.value.docxAsPdfUrl(sid, node.path),
+      }
+    } else if (ext === "pdf") {
+      viewingFile.value = {
+        path: node.path, name: node.name, kind: "pdf",
+        src: api.value.fileContentUrl(sid, node.path),
+      }
+    } else if (IMAGE_EXTS.has(ext)) {
+      viewingFile.value = {
+        path: node.path, name: node.name, kind: "image",
+        src: api.value.fileContentUrl(sid, node.path),
+      }
+    } else if (ext === "md" || ext === "markdown") {
+      const text = await toText(await api.value.fetchFileContent(sid, node.path))
+      viewingFile.value = { path: node.path, name: node.name, kind: "markdown" }
+      renderedMarkdown.value = marked.parse(text) as string
+    } else if (TEXT_EXTS.has(ext) || ext === "") {
+      const text = await toText(await api.value.fetchFileContent(sid, node.path))
+      viewingFile.value = { path: node.path, name: node.name, kind: "text", text }
+    } else {
+      /* doc/xlsx/pptx 等二进制类型不支持在线预览 */
+      viewingFile.value = { path: node.path, name: node.name, kind: "unsupported" }
+    }
+  } catch (e: any) {
+    viewingFile.value = {
+      path: node.path, name: node.name, kind: "text",
+      text: `[读取失败] ${e?.message || "未知错误"}`,
+    }
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+const renderedMarkdown = ref("")
 
 const sessionsSorted = computed(() =>
   [...history.sessions.value].sort((a, b) => {
@@ -132,21 +218,6 @@ async function onDelete(session: SessionListItem) {
     }
   } catch {
     /* 错误已在 composable 中设置 */
-  }
-}
-
-async function onViewFile(node: { path: string; name: string }) {
-  if (!history.selectedId.value) return
-  try {
-    viewingFile.value = {
-      path: node.path,
-      content: await api.value.fetchFileContent(history.selectedId.value, node.path),
-    }
-  } catch (e: any) {
-    viewingFile.value = {
-      path: node.path,
-      content: `[读取失败] ${e.message || "未知错误"}`,
-    }
   }
 }
 
@@ -313,7 +384,7 @@ history.fetchSessions(
                 <div class="mb-3 flex items-center justify-between">
                   <span class="text-sm font-mono text-card-foreground truncate">
                     <FileText class="mr-1.5 inline-block h-3.5 w-3.5 text-muted-foreground" />
-                    {{ viewingFile.path.split("/").pop() }}
+                    {{ viewingFile.name }}
                   </span>
                   <a
                     v-if="selectedFileNode"
@@ -324,7 +395,42 @@ history.fetchSessions(
                     下载
                   </a>
                 </div>
-                <pre class="max-h-[calc(100vh-420px)] overflow-auto whitespace-pre-wrap rounded-lg bg-background p-3 text-[12px] leading-relaxed text-card-foreground">{{ viewingFile.content }}</pre>
+
+                <!-- Markdown 渲染 -->
+                <div
+                  v-if="viewingFile.kind === 'markdown'"
+                  class="markdown-preview max-h-[calc(100vh-420px)] overflow-auto rounded-lg bg-background p-4 text-sm leading-relaxed text-card-foreground"
+                  v-html="renderedMarkdown"
+                />
+
+                <!-- 纯文本 -->
+                <pre
+                  v-else-if="viewingFile.kind === 'text'"
+                  class="max-h-[calc(100vh-420px)] overflow-auto whitespace-pre-wrap rounded-lg bg-background p-3 text-[12px] leading-relaxed text-card-foreground"
+                >{{ viewingFile.text }}</pre>
+
+                <!-- PDF / DOCX 转码预览 -->
+                <iframe
+                  v-else-if="viewingFile.kind === 'pdf' || viewingFile.kind === 'docx'"
+                  :src="viewingFile.src"
+                  :title="viewingFile.name"
+                  class="h-[calc(100vh-420px)] w-full rounded-lg border border-border bg-background"
+                />
+
+                <!-- 图片 -->
+                <div v-else-if="viewingFile.kind === 'image'" class="flex justify-center rounded-lg bg-background p-3">
+                  <img
+                    :src="viewingFile.src"
+                    :alt="viewingFile.name"
+                    class="max-h-[calc(100vh-420px)] max-w-full object-contain"
+                  />
+                </div>
+
+                <!-- 不支持预览的类型 -->
+                <div v-else class="flex flex-col items-center gap-2 py-10 text-center">
+                  <FileText class="h-8 w-8 text-muted-foreground/40" />
+                  <p class="text-xs text-muted-foreground">该文件类型暂不支持在线预览，请下载查看</p>
+                </div>
               </div>
               <div v-else class="flex items-center justify-center py-12">
                 <p class="text-xs text-muted-foreground/60">点击右侧文件树中的文件查看预览</p>
@@ -358,3 +464,66 @@ history.fetchSessions(
     </div>
   </div>
 </template>
+
+<style scoped>
+/* markdown 预览的基础排版（配合 design tokens，不引外部主题） */
+.markdown-preview :deep(h1),
+.markdown-preview :deep(h2),
+.markdown-preview :deep(h3),
+.markdown-preview :deep(h4) {
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 1.2em 0 0.5em;
+  color: var(--title-foreground, inherit);
+}
+.markdown-preview :deep(h1) { font-size: 1.4rem; border-bottom: 1px solid var(--border, #333); padding-bottom: 0.3em; }
+.markdown-preview :deep(h2) { font-size: 1.2rem; border-bottom: 1px solid var(--border, #333); padding-bottom: 0.25em; }
+.markdown-preview :deep(h3) { font-size: 1.05rem; }
+
+.markdown-preview :deep(p) { margin: 0.6em 0; }
+.markdown-preview :deep(ul),
+.markdown-preview :deep(ol) { margin: 0.6em 0; padding-left: 1.5em; }
+.markdown-preview :deep(ul) { list-style: disc; }
+.markdown-preview :deep(ol) { list-style: decimal; }
+.markdown-preview :deep(li) { margin: 0.25em 0; }
+
+.markdown-preview :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8em 0;
+  font-size: 0.85rem;
+}
+.markdown-preview :deep(th),
+.markdown-preview :deep(td) {
+  border: 1px solid var(--border, #333);
+  padding: 0.4em 0.6em;
+  text-align: left;
+}
+.markdown-preview :deep(th) { background: var(--muted, #222); font-weight: 600; }
+
+.markdown-preview :deep(code) {
+  background: var(--muted, #222);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
+}
+.markdown-preview :deep(pre) {
+  background: var(--muted, #222);
+  border-radius: 8px;
+  padding: 0.8em 1em;
+  overflow: auto;
+  margin: 0.8em 0;
+}
+.markdown-preview :deep(pre code) { background: transparent; padding: 0; }
+
+.markdown-preview :deep(blockquote) {
+  border-left: 3px solid var(--brand, #666);
+  padding-left: 0.8em;
+  margin: 0.8em 0;
+  color: var(--muted-foreground, #999);
+}
+.markdown-preview :deep(hr) { border: none; border-top: 1px solid var(--border, #333); margin: 1.2em 0; }
+.markdown-preview :deep(a) { color: var(--brand, #7aa2ff); text-decoration: underline; }
+.markdown-preview :deep(img) { max-width: 100%; }
+.markdown-preview :deep(> :first-child) { margin-top: 0; }
+</style>

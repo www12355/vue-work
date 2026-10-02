@@ -68,8 +68,11 @@ const PLACEHOLDER = {
     <!-- 侧边导航栏 -->
     <Sidebar />
 
-    <!-- 内容区：为侧边栏留出左边距 -->
-    <div class="relative z-10 w-full pl-0 pr-5 py-6 md:px-8 lg:pl-52 lg:pr-12 2xl:pl-60 2xl:pr-20">
+    <!-- 内容区：为侧边栏留出左边距；工作台视图下作为纵向 flex 容器，供工作区拉伸填满视口高度 -->
+    <div
+      class="relative z-10 w-full pl-0 pr-5 py-6 md:px-8 lg:min-h-screen lg:pl-52 lg:pr-12 2xl:pl-60 2xl:pr-20"
+      :class="view === 'workspace' ? 'flex flex-col' : ''"
+    >
       <Workspace v-if="view === 'workspace'">
         <template #bottom>
           <BottomHero />

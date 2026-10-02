@@ -1,10 +1,10 @@
 import { computed, reactive, ref } from "vue"
 import {
   createBidSession,
-  uploadBidFile,
   uploadBidText,
   startBidPipeline,
   bidDownloadUrl,
+  bidUploadUrl,
   bidWsUrl,
   fetchBidSessions,
   deleteBidSession,
@@ -13,6 +13,8 @@ import {
   fetchBidPipelineConfig,
   saveBidPipelineConfig,
 } from "@/services/api/bid"
+import { validateUploadFiles } from "@/services/fileValidation"
+import { xhrUploadFile } from "@/composables/useUpload"
 import type {
   DownloadableFile,
   SessionListItem,
@@ -498,20 +500,30 @@ export function createTenderState() {
     s.loading = true
     s.result = ""
 
+    /* 上传前预校验（与后端规则一致），不合法直接报错，不创建会话 */
+    const allFiles = [..._mainFiles, ..._refFiles]
+    const fileError = validateUploadFiles(allFiles)
+    if (fileError) {
+      s.loading = false
+      throw new Error(fileError)
+    }
+
     uploadPhase.current = "uploading"
     uploadPhase.progress = 0
     const session = await createBidSession()
     const sid = session.session_id
     pipeline.startProcessing(sid)
 
-    const allFiles = [..._mainFiles, ..._refFiles]
-    if (allFiles.length) {
-      for (let i = 0; i < allFiles.length; i++) {
-        const file = allFiles[i]
-        const type = _mainFiles.includes(file) ? "uploads" as const : "profile" as const
-        await uploadBidFile(sid, file, type)
-        uploadPhase.progress = Math.round(((i + 1) / allFiles.length) * 100)
-      }
+    /* 逐文件 XHR 上传，进度按「文件区间 + 字节进度」合成，粗到细都平滑 */
+    for (let i = 0; i < allFiles.length; i++) {
+      const file = allFiles[i]
+      const type = _mainFiles.includes(file) ? "uploads" as const : "profile" as const
+      const basePct = (i / allFiles.length) * 100
+      const span = 100 / allFiles.length
+      await xhrUploadFile(file, bidUploadUrl(sid, type), (pct) => {
+        uploadPhase.progress = Math.min(99, Math.round(basePct + (pct / 100) * span))
+      })
+      uploadPhase.progress = Math.round(((i + 1) / allFiles.length) * 100)
     }
 
     if (!allFiles.length && activeProposal.value?.name) {
@@ -520,15 +532,16 @@ export function createTenderState() {
 
     uploadPhase.current = "starting"
     const pipelinePayload = buildPipelineConfig()
+    // 先建 WS 再启动：流水线由后端后台任务立即执行，start 返回后才连接会丢掉最早的阶段消息
+    wsClient.connect(bidWsUrl(sid), pipeline.handleMessage)
     await startBidPipeline(sid, {
       task_package_id: s.targetPackage ? Number(s.targetPackage) || null : null,
-      wining_enabled: true,
+      winning_enabled: true,
       accompany_count: referenceCount.value,
-      company: activeProposal.value?.name ?? "",
+      company: "",
       pipeline_config_yaml: JSON.stringify(pipelinePayload, null, 2),
     })
 
-    wsClient.connect(bidWsUrl(sid), pipeline.handleMessage)
     s.loading = false
   }
 

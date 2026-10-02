@@ -113,26 +113,36 @@ async function fetchWithTimeout(
   }
 }
 
-/** 统一解析响应，非 2xx 抛 ApiError */
+/** 统一解析响应：JSON/文本 → 解析值；二进制（docx/pdf/图片等）→ Blob 交给调用方 */
 async function handleResponse(resp: Response): Promise<any> {
-  if (resp.ok) {
-    const text = await resp.text()
-    if (!text) return null
+  if (!resp.ok) {
+    let detail = `HTTP ${resp.status}`
     try {
-      return JSON.parse(text)
+      const body = JSON.parse(await resp.text())
+      detail = body.detail || body.message || detail
     } catch {
-      return text
+      /* 无法解析响应体时使用默认错误信息 */
     }
+    throw new ApiError(resp.status, detail)
   }
 
-  let detail = `HTTP ${resp.status}`
-  try {
-    const body = JSON.parse(await resp.text())
-    detail = body.detail || body.message || detail
-  } catch {
-    /* 无法解析响应体时使用默认错误信息 */
+  const contentType = resp.headers.get("content-type") ?? ""
+  const isBinary =
+    contentType.startsWith("application/") &&
+    !contentType.includes("json") &&
+    !contentType.includes("javascript")
+
+  if (isBinary) {
+    return resp.blob()
   }
-  throw new ApiError(resp.status, detail)
+
+  const text = await resp.text()
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
 }
 
 export interface ApiClient {

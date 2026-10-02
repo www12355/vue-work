@@ -75,7 +75,7 @@ function onAuth() {
     <div
       v-if="open"
       role="menu"
-      class="ws-fade-in absolute bottom-12 right-0 z-50 w-64 overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-3)]"
+      class="ws-fade-in absolute bottom-12 left-0 z-50 w-64 overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-3)]"
     >
       <!-- 用户信息 -->
       <div class="flex items-center gap-3 border-b border-border px-4 py-3.5">

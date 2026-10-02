@@ -185,10 +185,10 @@ function onCardClick(app: AppId) {
 </script>
 
 <template>
-  <div class="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
+  <div class="mt-6 grid grid-cols-1 gap-5 lg:max-h-[1080px] lg:flex-1 lg:grid-cols-3">
     <!-- 左侧内容：主卡片即放置区 -->
     <div class="flex flex-col gap-8 lg:col-span-2">
-      <div ref="dropRef" class="relative">
+      <div ref="dropRef" class="relative lg:min-h-[560px] lg:flex-1">
         <HeroCard :docked="dockedMeta" @open="openWindow" />
 
         <!-- 拖拽时覆盖在主卡片上的放置提示 -->

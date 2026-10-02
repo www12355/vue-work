@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * Pipeline 进度面板 — 顶部进度条 + 阶段卡片列表 + 输出文件。
+ * Pipeline 进度面板 — 顶部进度条 + 阶段卡片列表 + 运行日志 + 输出文件。
  * 替换表单区域显示，流水线运行中/完成后自动出现。
  */
 
-import { computed } from "vue"
+import { computed, ref, watch, nextTick } from "vue"
 import {
   Download,
   ExternalLink,
@@ -12,9 +12,17 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Terminal,
+  ChevronDown,
 } from "lucide-vue-next"
 import StageCard from "./StageCard.vue"
 import type { StageState, DownloadableFile } from "@/services/api/types"
+
+export interface PipelineLogEntry {
+  level: "info" | "success" | "error"
+  text: string
+  time: string
+}
 
 const props = defineProps<{
   stages: StageState[]
@@ -27,6 +35,7 @@ const props = defineProps<{
   error: string | null
   outputFiles: DownloadableFile[]
   estimatedTime: string
+  logs?: PipelineLogEntry[]
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +47,25 @@ const emit = defineEmits<{
 const progressPct = computed(() =>
   Math.round((props.completedCount / Math.max(props.totalStages, 1)) * 100),
 )
+
+/* ── 运行日志控制台 ── */
+const showLogs = ref(true)
+const logBox = ref<HTMLElement | null>(null)
+
+watch(
+  () => props.logs?.length,
+  async () => {
+    if (!showLogs.value) return
+    await nextTick()
+    logBox.value?.scrollTo({ top: logBox.value.scrollHeight })
+  },
+)
+
+function logColor(level: string): string {
+  if (level === "success") return "text-emerald-500"
+  if (level === "error") return "text-red-400"
+  return "text-muted-foreground"
+}
 </script>
 
 <template>
@@ -112,6 +140,37 @@ const progressPct = computed(() =>
         :stage="stage"
         :is-current="stage.id === currentStageId"
       />
+    </div>
+
+    <!-- 运行日志控制台 -->
+    <div v-if="logs?.length" class="rounded-2xl border border-border bg-card p-4">
+      <button
+        class="flex w-full items-center justify-between text-left"
+        @click="showLogs = !showLogs"
+      >
+        <span class="flex items-center gap-2 text-sm font-bold text-card-foreground">
+          <Terminal class="h-4 w-4 text-muted-foreground" />
+          运行日志
+          <span class="text-xs font-normal text-muted-foreground">{{ logs.length }} 条</span>
+        </span>
+        <ChevronDown
+          class="h-4 w-4 text-muted-foreground transition-transform"
+          :class="showLogs && 'rotate-180'"
+        />
+      </button>
+      <div
+        v-show="showLogs"
+        ref="logBox"
+        class="mt-3 max-h-56 space-y-1 overflow-auto rounded-xl bg-background p-3 font-mono text-[12px] leading-relaxed"
+      >
+        <div v-for="(log, idx) in logs" :key="idx" class="flex gap-2">
+          <span class="shrink-0 text-muted-foreground/50">{{ log.time }}</span>
+          <span class="shrink-0" :class="logColor(log.level)">
+            {{ log.level === "success" ? "✓" : log.level === "error" ? "✗" : "·" }}
+          </span>
+          <span class="whitespace-pre-wrap break-all" :class="logColor(log.level)">{{ log.text }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- 输出文件（流水线完成后） -->

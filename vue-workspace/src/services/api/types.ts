@@ -120,11 +120,12 @@ export interface CreateSessionResponse {
   session_id: string
 }
 
-/** pipeline 启动响应 */
+/** pipeline 启动响应（后端返回 session_id + message + ws_url） */
 export interface StartPipelineResponse {
   session_id: string
-  status: string
   message?: string
+  /** 后端返回的相对 WS 地址，如 /ws/{session_id} */
+  ws_url?: string
 }
 
 /** 可下载文件 */
